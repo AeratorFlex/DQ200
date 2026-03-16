@@ -32,7 +32,8 @@ void setup()
     mcp2515.setBitrate(CAN_500KBPS, MCP_8MHZ);
     mcp2515.setNormalMode();
 
-    pinMode(TOUCH_PIN_1, INPUT);
+    pinMode(TOUCH_PIN_1, INPUT_PULLUP);
+    pinMode(TOUCH_PIN_2, INPUT_PULLUP);
 
     delay(200);
     Serial.println("Starting");
@@ -107,8 +108,9 @@ void loop()
 {
     unsigned long current_time = micros();
 
+    //подключение диагностики
     static unsigned long last_press_1 = 0;
-    if (digitalRead(TOUCH_PIN_1) == HIGH && (current_time - last_press_1) > 1000000)
+    if (digitalRead(TOUCH_PIN_1) == LOW && (current_time - last_press_1) > 1000000)
     {
         last_press_1 = current_time;
 
@@ -129,20 +131,26 @@ void loop()
         }
     }
 
-    static unsigned long last_press_2 = 0;
-    if (digitalRead(TOUCH_PIN_3) == HIGH && (current_time - last_press_1) > 1000000)
+    //получение кодов неисправностей
+    static unsigned long last_press_3 = 0;
+    if (digitalRead(TOUCH_PIN_3) == LOW && (current_time - last_press_3) > 1000000)
     {
+        last_press_3 = current_time
         Fault_Codes_Request();
     }
 
-    static unsigned long last_press_2 = 0;
-    if (digitalRead(TOUCH_PIN_4) == HIGH && (current_time - last_press_1) > 1000000)
+
+    //удаление кодов неисправностей
+    static unsigned long last_press_4 = 0;
+    if (digitalRead(TOUCH_PIN_4) == LOW && (current_time - last_press_4) > 1000000)
     {
+        last_press_4 = current_time
         Fault_Codes_Delete();
     }
     
+    //запуск адаптации
     static unsigned long last_press_2 = 0;
-    if (digitalRead(TOUCH_PIN_2) == HIGH && (current_time - last_press_2) > 1000000)
+    if (digitalRead(TOUCH_PIN_2) == LOW && (current_time - last_press_2) > 1000000)
     {
         last_press_2 = current_time;
         flag_adaptation = true;
