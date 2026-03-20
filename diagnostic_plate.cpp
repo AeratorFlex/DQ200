@@ -23,6 +23,7 @@ void setup()
     lcd.init();
     lcd.backlight();
 
+    lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("CAN Data:");
 
@@ -293,6 +294,14 @@ void loop()
             break;
         }
     }
+    else
+    {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("No connection");
+        lcd.setCursor(1, 0);
+        lcd.print("Wait for 5 sec");
+    }
 
     if (flag_diagnostic_connection == true && flag_connection_step == 10)
     {
@@ -496,6 +505,7 @@ void Identification_Request_Frame()
     software_version[2] = t_part_frame.data[5];
     software_version[3] = t_part_frame.data[6];
 
+    lcd.clear();
     for (int i = 0; i < 10; i++)
     {
         lcd.setCursor(i, 0);
