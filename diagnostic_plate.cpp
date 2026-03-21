@@ -2,11 +2,13 @@
 #include <mcp2515.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
+#include <TimerOne.h>
 
 #define TOUCH_PIN_1 3 // diagnostic connection/disconnection
 #define TOUCH_PIN_2 4 // start_adaptation
 #define TOUCH_PIN_3 5 // fault_reading
 #define TOUCH_PIN_4 6 // fault_delete
+#define TOUCH_PIN_5 7 // engine start/stop
 
 MCP2515 mcp2515(10);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -20,6 +22,9 @@ struct Can_Frames
 
 void setup()
 {
+    Timer1.initialize(10000);  // 10 000 микросекунд = 10 мс
+    Timer1.attachInterrupt(Send_Three_Frames);
+
     lcd.init();
     lcd.backlight();
 
@@ -87,6 +92,8 @@ unsigned long part_number_request_frame_last_send = 0;
 unsigned long adaptation_frame_interval = 150000;
 unsigned long adaptation_frame_last_send = 0;
 
+volatile bool engine_flag = false;
+
 Can_Frames wakeup_CAN_frame = {0x200, {0x1F, 0xC0, 0x00, 0x10, 0x00, 0x03, 0x01}, 7}; // 10 раз с задержкой 75 мс
 Can_Frames try_1 = {0x710, {0x02, 0x10, 0x03, 0x55, 0x55, 0x55, 0x55, 0x55}, 8};
 Can_Frames try_2 = {0x200, {0x02, 0xC0, 0x00, 0x10, 0x00, 0x03, 0x01}, 7};
@@ -104,6 +111,12 @@ Can_Frames adaptation_frame = {0x760, {0x15, 0x00, 0x04, 0x31, 0xBA, 0x00, 0x3C}
 Can_Frames fault_codes_request = {0x760, {0x18, 0x00, 0x04, 0x18, 0x00, 0xFF, 0x00}, 7};
 Can_Frames fault_codes_delete= {0x760, {0x1A, 0x00, 0x04, 0x18, 0x00, 0xFF, 0x00}, 7};
 
+Can_Frames engine_frame_off = {0x280, {0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x15, 0x00}, 8};
+Can_Frames engine_frame_on = {0x280, {0x01, 0x0F, 0x9A, 0x0B, 0x0B, 0x00, 0x11, 0x0B}, 8};  //742
+Can_Frames frames[2] = {
+    {0x448, {0x83, 0x00, 0x88, 0x1A, 0x70}, 5},
+    {0x4A0, {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 8}
+};
 
 void loop()
 {
@@ -136,7 +149,7 @@ void loop()
     static unsigned long last_press_3 = 0;
     if (digitalRead(TOUCH_PIN_3) == LOW && (current_time - last_press_3) > 1000000)
     {
-        last_press_3 = current_time
+        last_press_3 = current_time;
         Fault_Codes_Request();
     }
 
@@ -145,7 +158,7 @@ void loop()
     static unsigned long last_press_4 = 0;
     if (digitalRead(TOUCH_PIN_4) == LOW && (current_time - last_press_4) > 1000000)
     {
-        last_press_4 = current_time
+        last_press_4 = current_time;
         Fault_Codes_Delete();
     }
     
@@ -155,6 +168,14 @@ void loop()
     {
         last_press_2 = current_time;
         flag_adaptation = true;
+    }
+
+    //запуск или остановка двигателя
+    static unsigned long last_press_5 = 0;
+    if(digitalRead(TOUCH_PIN_5) == LOW && (current_time - last_press_5) > 1000000)
+    {
+        last_press_5 = current_time;
+        engine_flag = !engine_flag;
     }
 
     if (flag_diagnostic_connection == true && flag_connection_step != 10)
@@ -816,4 +837,27 @@ void Fault_Codes_Delete()
     frame.can_dlc = fault_codes_delete.len;
     memcpy(frame.data, fault_codes_delete.DATA, frame.can_dlc);
     mcp2515.sendMessage(&frame);
+}
+
+void Send_Three_Frames()
+{
+    can_frame frame;
+    
+    if (engine_flag) {
+        frame.can_id = engine_frame_on.ID;
+        frame.can_dlc = engine_frame_on.len;
+        memcpy(frame.data, engine_frame_on.DATA, frame.can_dlc);
+    } else {
+        frame.can_id = engine_frame_off.ID;
+        frame.can_dlc = engine_frame_off.len;
+        memcpy(frame.data, engine_frame_off.DATA, frame.can_dlc);
+    }
+    mcp2515.sendMessage(&frame);
+    
+    for (int i = 0; i < 2; i++) {
+        frame.can_id = frames[i].ID;
+        frame.can_dlc = frames[i].len;
+        memcpy(frame.data, frames[i].DATA, frame.can_dlc);
+        mcp2515.sendMessage(&frame);
+    }
 }
